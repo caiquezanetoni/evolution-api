@@ -163,11 +163,7 @@ export const initGlobalQueues = () => {
       durable: true,
       autoDelete: false,
       arguments: {
-        'x-queue-type': 'quorum',
-        'x-message-ttl': messageTtl,
-        'x-max-length': maxLength,
-        'x-max-length-bytes': maxLengthBytes,
-        'x-overflow': 'reject-publish',
+        'x-queue-type': 'quorum'
       },
     });
 
@@ -204,11 +200,7 @@ export const initQueues = (instanceName: string, events: string[]) => {
       durable: true,
       autoDelete: false,
       arguments: {
-        'x-queue-type': 'quorum',
-        'x-message-ttl': messageTtl,
-        'x-max-length': maxLength,
-        'x-max-length-bytes': maxLengthBytes,
-        'x-overflow': 'reject-publish',
+        'x-queue-type': 'quorum'
       },
     });
 
