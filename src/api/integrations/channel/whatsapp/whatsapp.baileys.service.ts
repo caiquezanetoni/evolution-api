@@ -1468,6 +1468,7 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           const message: any = {
+            id: key.id,
             messageId: findMessage.id,
             keyId: key.id,
             remoteJid: key?.remoteJid,
