@@ -1452,6 +1452,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
           if (!findMessage) {
             const message: any = {
+              id: key.id,
               messageId: null,
               keyId: key.id,
               remoteJid: key?.remoteJid,
@@ -1461,7 +1462,7 @@ export class BaileysStartupService extends ChannelStartupService {
               pollUpdates,
               instanceId: this.instanceId,
             };
-            
+
             this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
             continue;
           }
