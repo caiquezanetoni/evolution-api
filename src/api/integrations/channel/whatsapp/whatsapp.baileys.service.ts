@@ -1451,6 +1451,18 @@ export class BaileysStartupService extends ChannelStartupService {
           });
 
           if (!findMessage) {
+            const message: any = {
+              messageId: null,
+              keyId: key.id,
+              remoteJid: key?.remoteJid,
+              fromMe: key.fromMe,
+              participant: key?.remoteJid,
+              status: status[update.status] ?? 'DELETED',
+              pollUpdates,
+              instanceId: this.instanceId,
+            };
+            
+            this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
             continue;
           }
 
