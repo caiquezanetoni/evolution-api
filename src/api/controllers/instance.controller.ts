@@ -653,6 +653,13 @@ export class InstanceController {
           await delay(2000);
 
           return await this.connectionState({ instanceName });
+        case 'connecting':
+          this.logger.verbose('logging out instance: ' + instanceName);
+          instance.clearCacheChatwoot();
+          await instance.reloadConnection();
+          await delay(2000);
+
+          return await this.connectionState({ instanceName });
         default:
           return await this.connectionState({ instanceName });
       }
