@@ -1446,30 +1446,8 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
-          const findMessage = await this.prismaRepository.message.findFirst({
-            where: { instanceId: this.instanceId, key: { path: ['id'], equals: key.id } },
-          });
-
-          if (!findMessage) {
-            const message: any = {
-              id: key.id,
-              messageId: null,
-              keyId: key.id,
-              remoteJid: key?.remoteJid,
-              fromMe: key.fromMe,
-              participant: key?.remoteJid,
-              status: status[update.status] ?? 'DELETED',
-              pollUpdates,
-              instanceId: this.instanceId,
-            };
-
-            this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
-            continue;
-          }
-
           const message: any = {
             id: key.id,
-            messageId: findMessage.id,
             keyId: key.id,
             remoteJid: key?.remoteJid,
             fromMe: key.fromMe,
@@ -1478,6 +1456,16 @@ export class BaileysStartupService extends ChannelStartupService {
             pollUpdates,
             instanceId: this.instanceId,
           };
+
+          let findMessage: any;
+          const configDatabaseData = this.configService.get<Database>('DATABASE').SAVE_DATA;
+          if (configDatabaseData.HISTORIC || configDatabaseData.NEW_MESSAGE) {
+            findMessage = await this.prismaRepository.message.findFirst({
+              where: { instanceId: this.instanceId, key: { path: ['id'], equals: key.id } },
+            });
+
+            if (findMessage) message.messageId = findMessage.id;
+          }
 
           if (update.message === null && update.status === undefined) {
             this.sendDataWebhook(Events.MESSAGES_DELETE, key);
@@ -1494,7 +1482,9 @@ export class BaileysStartupService extends ChannelStartupService {
             }
 
             continue;
-          } else if (update.status !== undefined && status[update.status] !== findMessage.status) {
+          }
+
+          if (findMessage && update.status !== undefined && status[update.status] !== findMessage.status) {
             if (!key.fromMe && key.remoteJid) {
               readChatToUpdate[key.remoteJid] = true;
 
@@ -3452,17 +3442,20 @@ export class BaileysStartupService extends ChannelStartupService {
               where: { id: message.id },
               data: { key: { ...existingKey, deleted: true }, status: 'DELETED' },
             });
-            const messageUpdate: any = {
-              messageId: message.id,
-              keyId: messageId,
-              remoteJid: response.key.remoteJid,
-              fromMe: response.key.fromMe,
-              participant: response.key?.remoteJid,
-              status: 'DELETED',
-              instanceId: this.instanceId,
-            };
-            await this.prismaRepository.messageUpdate.create({ data: messageUpdate });
+            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
+              const messageUpdate: any = {
+                messageId: message.id,
+                keyId: messageId,
+                remoteJid: response.key.remoteJid,
+                fromMe: response.key.fromMe,
+                participant: response.key?.remoteJid,
+                status: 'DELETED',
+                instanceId: this.instanceId,
+              };
+              await this.prismaRepository.messageUpdate.create({ data: messageUpdate });
+            }
           } else {
+            if (!message) return response;
             await this.prismaRepository.message.deleteMany({ where: { id: message.id } });
           }
           this.sendDataWebhook(Events.MESSAGES_DELETE, {
@@ -3794,6 +3787,10 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async formatUpdateMessage(data: UpdateMessageDto) {
     try {
+      if (!this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE) {
+        return data;
+      }
+
       const msg: any = await this.getMessage(data.key, true);
 
       if (msg?.messageType === 'conversation' || msg?.messageType === 'extendedTextMessage') {
@@ -3827,13 +3824,15 @@ export class BaileysStartupService extends ChannelStartupService {
 
     try {
       const oldMessage: any = await this.getMessage(data.key, true);
-      if (!oldMessage) throw new NotFoundException('Message not found');
-      if (oldMessage?.key?.remoteJid !== jid) {
-        throw new BadRequestException('RemoteJid does not match');
-      }
-      if (oldMessage?.messageTimestamp > Date.now() + 900000) {
-        // 15 minutes in milliseconds
-        throw new BadRequestException('Message is older than 15 minutes');
+      if (this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE) {
+        if (!oldMessage) throw new NotFoundException('Message not found');
+        if (oldMessage?.key?.remoteJid !== jid) {
+          throw new BadRequestException('RemoteJid does not match');
+        }
+        if (oldMessage?.messageTimestamp > Date.now() + 900000) {
+          // 15 minutes in milliseconds
+          throw new BadRequestException('Message is older than 15 minutes');
+        }
       }
 
       const messageSent = await this.client.sendMessage(jid, { ...(options as any), edit: data.key });
@@ -3851,7 +3850,7 @@ export class BaileysStartupService extends ChannelStartupService {
             );
 
           const messageId = messageSent.message?.protocolMessage?.key?.id;
-          if (messageId) {
+          if (messageId && this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE) {
             let message = await this.prismaRepository.message.findFirst({
               where: { key: { path: ['id'], equals: messageId } },
             });
@@ -3863,6 +3862,7 @@ export class BaileysStartupService extends ChannelStartupService {
             if ((message.key.valueOf() as any)?.deleted) {
               new BadRequestException('You cannot edit deleted messages');
             }
+
             if (oldMessage.messageType === 'conversation' || oldMessage.messageType === 'extendedTextMessage') {
               oldMessage.message.conversation = data.text;
             } else {
@@ -3876,16 +3876,19 @@ export class BaileysStartupService extends ChannelStartupService {
                 messageTimestamp: Math.floor(Date.now() / 1000), // Convert to int32 by dividing by 1000 to get seconds
               },
             });
-            const messageUpdate: any = {
-              messageId: message.id,
-              keyId: messageId,
-              remoteJid: messageSent.key.remoteJid,
-              fromMe: messageSent.key.fromMe,
-              participant: messageSent.key?.remoteJid,
-              status: 'EDITED',
-              instanceId: this.instanceId,
-            };
-            await this.prismaRepository.messageUpdate.create({ data: messageUpdate });
+
+            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
+              const messageUpdate: any = {
+                messageId: message.id,
+                keyId: messageId,
+                remoteJid: messageSent.key.remoteJid,
+                fromMe: messageSent.key.fromMe,
+                participant: messageSent.key?.remoteJid,
+                status: 'EDITED',
+                instanceId: this.instanceId,
+              };
+              await this.prismaRepository.messageUpdate.create({ data: messageUpdate });
+            }
           }
         }
       }
