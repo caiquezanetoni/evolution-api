@@ -16,7 +16,7 @@ function selectProxyAgent(proxyUrl: string): HttpsProxyAgent<string> | SocksProx
   // When a proxy URL is used to build the URL object, the protocol returned by procotol's property contains a `:` at
   // the end so, we add the protocol constants without the `:` to avoid confusion.
   const PROXY_HTTP_PROTOCOL = 'http:';
-  const PROXY_SOCKS_PROTOCOL = 'socks:';
+  const PROXY_SOCKS_PROTOCOL = 'socks5:';
 
   switch (url.protocol) {
     case PROXY_HTTP_PROTOCOL:
