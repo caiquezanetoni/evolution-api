@@ -16,6 +16,7 @@ import EventEmitter2 from 'eventemitter2';
 import { v4 } from 'uuid';
 
 import { ProxyController } from './proxy.controller';
+import { BaileysStartupService } from '@api/integrations/channel/whatsapp/whatsapp.baileys.service';
 
 export class InstanceController {
   constructor(
@@ -30,7 +31,7 @@ export class InstanceController {
     private readonly chatwootCache: CacheService,
     private readonly baileysCache: CacheService,
     private readonly providerFiles: ProviderFiles,
-  ) {}
+  ) { }
 
   private readonly logger = new Logger('InstanceController');
 
@@ -352,6 +353,20 @@ export class InstanceController {
         instance.client?.end(new Error('restart'));
         return await this.connectToWhatsapp({ instanceName });
       }
+    } catch (error) {
+      this.logger.error(error);
+      return { error: true, message: error.toString() };
+    }
+  }
+
+  public async forceRestartInstance({ instanceName }: InstanceDto) {
+    try {
+      const instance = this.waMonitor.waInstances[instanceName] as BaileysStartupService;
+      instance.client?.ws?.close();
+      instance.client?.end(new Error('restart'));
+      await instance.connectToWhatsapp();
+      await delay(2000);
+      await this.connectionState({ instanceName });
     } catch (error) {
       this.logger.error(error);
       return { error: true, message: error.toString() };
