@@ -19,7 +19,7 @@ export class BaileysController {
   public async assertSessions({ instanceName }: InstanceDto, body: any) {
     const instance = this.waMonitor.waInstances[instanceName];
 
-    return instance.baileysAssertSessions(body?.jids, body?.force);
+    return instance.baileysAssertSessions(body?.jids);
   }
 
   public async createParticipantNodes({ instanceName }: InstanceDto, body: any) {
