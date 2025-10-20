@@ -366,7 +366,7 @@ export class InstanceController {
       instance.client?.end(new Error('restart'));
       await instance.connectToWhatsapp();
       await delay(2000);
-      await this.connectionState({ instanceName });
+      return await this.connectionState({ instanceName });
     } catch (error) {
       this.logger.error(error);
       return { error: true, message: error.toString() };
