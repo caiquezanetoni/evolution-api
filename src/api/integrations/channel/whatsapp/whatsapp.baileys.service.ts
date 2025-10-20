@@ -109,6 +109,7 @@ import makeWASocket, {
   getContentType,
   getDevice,
   GroupMetadata,
+  GroupParticipant,
   isJidBroadcast,
   isJidGroup,
   isJidNewsletter,
@@ -1585,7 +1586,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
     'group-participants.update': async (participantsUpdate: {
       id: string;
-      participants: string[];
+      participants: GroupParticipant[];
       action: ParticipantAction;
     }) => {
       // ENHANCEMENT: Adds participantsData field while maintaining backward compatibility
@@ -1609,18 +1610,18 @@ export class BaileysStartupService extends ChannelStartupService {
         }
 
         // Filtra apenas os participantes que estão no evento
-        const resolvedParticipants = participantsUpdate.participants.map((participantId) => {
-          const participantData = groupParticipants.participants.find((p) => p.id === participantId);
+        const resolvedParticipants = participantsUpdate.participants.map((participant) => {
+          const participantData = groupParticipants.participants.find((p) => p.id === participant.id);
 
           let phoneNumber: string;
           if (participantData?.phoneNumber) {
             phoneNumber = participantData.phoneNumber;
           } else {
-            phoneNumber = normalizePhoneNumber(participantId);
+            phoneNumber = normalizePhoneNumber(participant.id);
           }
 
           return {
-            jid: participantId,
+            jid: participant.id,
             phoneNumber,
             name: participantData?.name,
             imgUrl: participantData?.imgUrl,
@@ -2163,7 +2164,7 @@ export class BaileysStartupService extends ChannelStartupService {
       if (options?.quoted) {
         const m = options?.quoted;
 
-        const msg = m?.message ? m : ((await this.getMessage(m.key, true)) as proto.IWebMessageInfo);
+        const msg = m?.message ? m : ((await this.getMessage(m.key, true)) as WAMessage);
 
         if (msg) {
           quoted = msg;
@@ -2538,9 +2539,43 @@ export class BaileysStartupService extends ChannelStartupService {
     try {
       const type = mediaMessage.mediatype === 'ptv' ? 'video' : mediaMessage.mediatype;
 
+      let mediaInput: any;
+      if (mediaMessage.mediatype === 'image') {
+        let imageBuffer: Buffer;
+        if (isURL(mediaMessage.media)) {
+          let config: any = { responseType: 'arraybuffer' };
+
+          if (this.localProxy?.enabled) {
+            config = {
+              ...config,
+              httpsAgent: makeProxyAgent({
+                host: this.localProxy.host,
+                port: this.localProxy.port,
+                protocol: this.localProxy.protocol,
+                username: this.localProxy.username,
+                password: this.localProxy.password,
+              }),
+            };
+          }
+
+          const response = await axios.get(mediaMessage.media, config);
+          imageBuffer = Buffer.from(response.data, 'binary');
+        } else {
+          imageBuffer = Buffer.from(mediaMessage.media, 'base64');
+        }
+
+        mediaInput = await sharp(imageBuffer).jpeg().toBuffer();
+        mediaMessage.fileName ??= 'image.jpg';
+        mediaMessage.mimetype = 'image/jpeg';
+      } else {
+        mediaInput = isURL(mediaMessage.media)
+          ? { url: mediaMessage.media }
+          : Buffer.from(mediaMessage.media, 'base64');
+      }
+
       const prepareMedia = await prepareWAMessageMedia(
         {
-          [type]: isURL(mediaMessage.media) ? { url: mediaMessage.media } : Buffer.from(mediaMessage.media, 'base64'),
+          [type]: mediaInput,
         } as any,
         { upload: this.client.waUploadToServer },
       );
@@ -2554,7 +2589,7 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       if (mediaMessage.mediatype === 'image' && !mediaMessage.fileName) {
-        mediaMessage.fileName = 'image.png';
+        mediaMessage.fileName = 'image.jpg';
       }
 
       if (mediaMessage.mediatype === 'video' && !mediaMessage.fileName) {
