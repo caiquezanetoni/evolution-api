@@ -788,6 +788,7 @@ export class BusinessStartupService extends ChannelStartupService {
 
             const message: any = {
               messageId: findMessage.id,
+              id: key.id,
               keyId: key.id,
               remoteJid: key.remoteJid,
               fromMe: key.fromMe,

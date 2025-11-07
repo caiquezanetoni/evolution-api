@@ -1473,6 +1473,7 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           const message: any = {
+            id: key.id,
             keyId: key.id,
             remoteJid: key?.remoteJid,
             fromMe: key.fromMe,
